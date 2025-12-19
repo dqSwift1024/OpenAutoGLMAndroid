@@ -5,9 +5,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doOnTextChanged
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -15,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.dd.autoglm.data.ConversationHistoryRepository
 import com.dd.autoglm.databinding.FragmentFirstBinding
 import com.dd.autoglm.viewmodel.ChatViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -25,8 +29,10 @@ class FirstFragment : Fragment() {
     private var _binding: FragmentFirstBinding? = null
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels()
+    private lateinit var historyRepository: ConversationHistoryRepository
 
     private lateinit var chatAdapter: ChatMessageAdapter
+    private var isFirstUserMessage = true // 标记是否是第一条用户消息
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -39,9 +45,11 @@ class FirstFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        historyRepository = ConversationHistoryRepository(requireContext())
         setupToolbar()
         setupRecyclerView()
         setupInputArea()
+        setupKeyboardInsets()
         observeViewModel()
     }
 
@@ -68,6 +76,13 @@ class FirstFragment : Fragment() {
         binding.sendButton.setOnClickListener {
             val userInput = binding.messageInput.text.toString()
             if (userInput.isNotBlank()) {
+                // 如果是第一条用户消息，保存到历史记录
+                if (isFirstUserMessage) {
+                    val history = com.dd.autoglm.data.ConversationHistory.create(userInput)
+                    historyRepository.saveHistory(history)
+                    isFirstUserMessage = false
+                }
+                
                 viewModel.sendMessage(userInput)
                 binding.messageInput.text.clear()
                 hideKeyboard()
@@ -85,6 +100,71 @@ class FirstFragment : Fragment() {
         // Handle error card dismiss
         binding.closeErrorButton.setOnClickListener { 
             viewModel.clearError()
+        }
+    }
+    
+    /**
+     * 使用WindowInsets处理键盘，确保输入框在键盘弹出时被顶上来
+     */
+    private fun setupKeyboardInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val systemBarsInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            // 计算键盘的实际高度（减去系统导航栏高度）
+            val keyboardHeight = if (imeInsets.bottom > 0) {
+                imeInsets.bottom - systemBarsInsets.bottom
+            } else {
+                0
+            }
+            
+            // 使用translationY来移动输入框，使其在键盘弹出时被顶上来
+            binding.inputLayout.translationY = -keyboardHeight.toFloat()
+            
+            // 设置RecyclerView的底部padding，避免内容被输入框遮挡
+            val inputLayoutHeight = binding.inputLayout.height
+            val bottomPadding = if (keyboardHeight > 0) {
+                keyboardHeight + inputLayoutHeight
+            } else {
+                inputLayoutHeight
+            }
+            
+            binding.chatRecyclerView.setPadding(
+                binding.chatRecyclerView.paddingLeft,
+                binding.chatRecyclerView.paddingTop,
+                binding.chatRecyclerView.paddingRight,
+                bottomPadding
+            )
+            
+            // 如果键盘已弹出，滚动到底部确保输入框可见
+            if (keyboardHeight > 0) {
+                binding.root.postDelayed({
+                    scrollToBottom()
+                }, 100)
+            }
+            
+            insets
+        }
+        
+        // 当输入框获得焦点时，确保它可见
+        binding.messageInput.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                // 延迟滚动，确保键盘已经弹出
+                binding.root.postDelayed({
+                    scrollToBottom()
+                }, 300)
+            }
+        }
+    }
+    
+    /**
+     * 滚动RecyclerView到底部
+     */
+    private fun scrollToBottom() {
+        if (::chatAdapter.isInitialized && chatAdapter.itemCount > 0) {
+            binding.chatRecyclerView.post {
+                binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+            }
         }
     }
 
@@ -120,6 +200,15 @@ class FirstFragment : Fragment() {
                     uiState.taskCompletedMessage?.let {
                         Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
                         viewModel.clearTaskCompletedMessage()
+                        // 任务完成后，重置标记，下次发送消息时创建新的历史记录
+                        isFirstUserMessage = true
+                        // 刷新侧滑栏的历史记录列表
+                        (activity as? MainActivity)?.refreshHistoryList()
+                    }
+                    
+                    // 当消息列表被清空时（新会话开始），重置标记
+                    if (uiState.messages.isEmpty() && !uiState.isLoading) {
+                        isFirstUserMessage = true
                     }
                 }
             }

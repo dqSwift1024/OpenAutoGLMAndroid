@@ -13,6 +13,7 @@
         android:layout_height="match_parent"
         android:layout_above="@+id/input_layout"
         android:clipToPadding="false"
+        android:paddingTop="8dp"
         android:paddingBottom="8dp"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         tools:listitem="@layout/item_chat_message_user" />
@@ -44,7 +45,7 @@
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_edittext_rounded"
-            android:hint="请输入消息..."
+            android:hint=""
             android:inputType="textMultiLine"
             android:maxLines="5"
             android:padding="12dp"
