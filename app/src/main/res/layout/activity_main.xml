@@ -24,7 +24,7 @@
                 android:layout_height="?attr/actionBarSize"
                 android:background="#F0F0F0"
                 android:elevation="0dp"
-                app:title=""
+                app:title="新对话"
                 app:navigationIcon="@android:drawable/ic_menu_sort_by_size" />
 
         </com.google.android.material.appbar.AppBarLayout>
@@ -71,24 +71,25 @@
 
             <ImageView
                 android:id="@+id/avatar_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_myplaces"
-                android:layout_marginEnd="16dp"/>
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@mipmap/icon_header"
+                android:layout_marginEnd="10dp"/>
 
             <TextView
                 android:id="@+id/account_info"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="199******99"
-                android:textAppearance="?attr/textAppearanceBody1" />
+                android:textSize="14sp"
+                android:textColor="#212121"
+                android:text="未登录" />
 
             <ImageView
                 android:id="@+id/more_options_icon"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:src="@android:drawable/ic_menu_more" />
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@mipmap/icon_more" />
         </LinearLayout>
     </LinearLayout>
 

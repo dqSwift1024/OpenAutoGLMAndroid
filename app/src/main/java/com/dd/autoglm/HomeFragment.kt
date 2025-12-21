@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -19,14 +18,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.dd.autoglm.data.ConversationHistoryRepository
-import com.dd.autoglm.databinding.FragmentFirstBinding
+import com.dd.autoglm.databinding.FragmentHomeBinding
 import com.dd.autoglm.viewmodel.ChatViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class FirstFragment : Fragment() {
+class HomeFragment : Fragment() {
 
-    private var _binding: FragmentFirstBinding? = null
+    private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels()
     private lateinit var historyRepository: ConversationHistoryRepository
@@ -38,7 +37,7 @@ class FirstFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentFirstBinding.inflate(inflater, container, false)
+        _binding = FragmentHomeBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -60,8 +59,8 @@ class FirstFragment : Fragment() {
         }
 
         // Find the clear button in the toolbar (assuming it's part of MainActivity's menu)
-        // For now, we'll assume a clear button will be handled in MainActivity's menu or a custom toolbar within FirstFragment
-        // If you want a custom toolbar for FirstFragment, you'd inflate it here and set it as supportActionBar
+        // For now, we'll assume a clear button will be handled in MainActivity's menu or a custom toolbar within HomeFragment
+        // If you want a custom toolbar for HomeFragment, you'd inflate it here and set it as supportActionBar
     }
 
     private fun setupRecyclerView() {

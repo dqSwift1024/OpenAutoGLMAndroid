@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#F0F0F0"
     tools:context=".SettingsFragment">
 
     <LinearLayout
@@ -13,33 +14,60 @@
         android:padding="16dp">
 
         <!-- Accessibility Service -->
-        <TextView
-            style="?attr/textAppearanceTitleMedium"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="无障碍服务" />
-
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/accessibility_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:gravity="center_vertical">
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/accessibility_enabled_bg"
+            tools:cardBackgroundColor="@color/accessibility_enabled_bg">
 
-            <TextView
-                android:id="@+id/accessibility_status"
-                style="?attr/textAppearanceBodyMedium"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                tools:text="状态: 未启用" />
+                android:orientation="horizontal"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:padding="16dp"
+                android:gravity="start|center_vertical">
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="vertical">
 
-            <Button
-                android:id="@+id/go_to_accessibility_settings"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="去开启" />
-        </LinearLayout>
+                    <TextView
+                        android:id="@+id/accessibility_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="无障碍服务"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="#212121"/>
+
+                    <TextView
+                        android:id="@+id/accessibility_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="已启用"
+                        android:textSize="12sp"
+                        android:textColor="#424242"
+                        tools:text="已启用" />
+                </LinearLayout>
+                <Button
+                    android:id="@+id/go_to_accessibility_settings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="前往设置"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- API Configuration -->
         <TextView
@@ -105,24 +133,6 @@
                 android:indeterminate="true"
                 android:visibility="gone" />
         </FrameLayout>
-
-        <!-- Status Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/status_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:visibility="gone"
-            app:cardElevation="4dp"
-            tools:visibility="visible">
-
-            <TextView
-                android:id="@+id/status_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="16dp"
-                tools:text="设置已保存" />
-        </com.google.android.material.card.MaterialCardView>
 
         <!-- Instructions -->
         <TextView

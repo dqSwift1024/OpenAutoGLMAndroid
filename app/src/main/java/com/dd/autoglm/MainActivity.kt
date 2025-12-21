@@ -42,10 +42,10 @@ class MainActivity : AppCompatActivity() {
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
         val navController = findNavController(R.id.nav_host_fragment_content_main)
-        // AppBarConfiguration 需要包含所有顶级目标，包括 FirstFragment
-        // 这样导航图标才能正常工作，但 FirstFragment 不会在侧滑栏菜单中显示（因为侧滑栏是自定义的）
+        // AppBarConfiguration 需要包含所有顶级目标，包括 HomeFragment
+        // 这样导航图标才能正常工作，但 HomeFragment 不会在侧滑栏菜单中显示（因为侧滑栏是自定义的）
         appBarConfiguration = AppBarConfiguration(setOf(
-            R.id.FirstFragment, R.id.nav_history, R.id.nav_settings
+            R.id.HomeFragment, R.id.nav_history, R.id.nav_settings
         ), drawerLayout)
         setupActionBarWithNavController(navController, appBarConfiguration)
 
@@ -103,8 +103,6 @@ class MainActivity : AppCompatActivity() {
         binding.toolbar.apply {
             // 设置背景为灰白色
             setBackgroundColor(0xFFF0F0F0.toInt())
-            // 去掉标题
-            title = ""
             // 设置导航图标颜色为深色（黑色），适配浅色背景
             navigationIcon?.setTint(android.graphics.Color.BLACK)
         }
@@ -144,7 +142,7 @@ class MainActivity : AppCompatActivity() {
             onItemClick = { history ->
                 // 点击历史记录，导航回首页
                 val navController = findNavController(R.id.nav_host_fragment_content_main)
-                navController.navigate(R.id.FirstFragment)
+                navController.navigate(R.id.HomeFragment)
                 binding.drawerLayout.closeDrawers()
             },
             onItemDelete = { history ->

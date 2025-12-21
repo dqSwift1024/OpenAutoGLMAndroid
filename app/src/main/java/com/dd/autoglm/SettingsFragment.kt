@@ -6,6 +6,8 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doOnTextChanged
 import androidx.fragment.app.Fragment
@@ -15,7 +17,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.dd.autoglm.databinding.FragmentSettingsBinding
 import com.dd.autoglm.viewmodel.SettingsViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class SettingsFragment : Fragment() {
@@ -58,11 +59,6 @@ class SettingsFragment : Fragment() {
         binding.saveButton.setOnClickListener {
             viewModel.saveSettings()
         }
-
-        // 点击状态卡可以清除错误信息
-        binding.statusCard.setOnClickListener {
-            viewModel.clearError()
-        }
     }
 
     private fun observeUiState() {
@@ -81,30 +77,30 @@ class SettingsFragment : Fragment() {
                     }
 
                     // 更新无障碍服务状态
-                    binding.accessibilityStatus.text = if (uiState.isAccessibilityEnabled) "状态: 已启用" else "状态: 未启用"
-                    binding.goToAccessibilitySettings.text = if (uiState.isAccessibilityEnabled) "已开启" else "去开启"
-                    binding.goToAccessibilitySettings.isEnabled = !uiState.isAccessibilityEnabled
+                    if (uiState.isAccessibilityEnabled) {
+                        // 已启用：浅蓝色背景，显示"已启用"
+                        binding.accessibilityCard.setCardBackgroundColor(
+                            ContextCompat.getColor(requireContext(), com.dd.autoglm.R.color.accessibility_enabled_bg)
+                        )
+                        binding.accessibilityStatus.text = "已启用"
+                        binding.goToAccessibilitySettings.visibility = View.GONE
+                    } else {
+                        // 未启用：粉红色背景，显示"前往设置"
+                        binding.accessibilityCard.setCardBackgroundColor(
+                            ContextCompat.getColor(requireContext(), com.dd.autoglm.R.color.accessibility_disabled_bg)
+                        )
+                        binding.accessibilityStatus.text = "未启用, 请点击\"前往设置\""
+                        binding.goToAccessibilitySettings.visibility = View.VISIBLE
+                    }
 
                     // 更新加载状态
                     binding.saveProgress.isVisible = uiState.isLoading
                     binding.saveButton.isEnabled = !uiState.isLoading
 
-                    // 显示保存状态和反馈
-                    val statusMessage = when {
-                        uiState.saveSuccess == true -> "设置已保存"
-                        uiState.error != null -> uiState.error
-                        else -> null
-                    }
-
-                    binding.statusCard.isVisible = statusMessage != null
-                    binding.statusText.text = statusMessage
-
-                    // 如果保存成功，3秒后自动隐藏状态卡
+                    // 显示保存成功Toast
                     if (uiState.saveSuccess == true) {
-                        lifecycleScope.launch {
-                            delay(3000)
-                            viewModel.clearError()
-                        }
+                        Toast.makeText(requireContext(), "已保存成功", Toast.LENGTH_SHORT).show()
+                        viewModel.clearError()
                     }
                 }
             }

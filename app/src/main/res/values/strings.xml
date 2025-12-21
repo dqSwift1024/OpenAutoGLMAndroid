@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">Open-AutoGLM-Android</string>
-    <string name="action_settings">Settings</string>
+    <string name="action_settings">设置</string>
     <!-- Strings used for fragments for navigation -->
-    <string name="first_fragment_label">""</string>
+    <string name="home_fragment_label">"新对话"</string>
+    <string name="action_history">"历史"</string>
     <string name="accessibility_service_description">用于自动化手机操作，需要此权限来执行点击、滑动、输入等操作</string>
 </resources>
