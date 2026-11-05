@@ -4,16 +4,24 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Bitmap
 import android.graphics.Path
+import android.graphics.Color
+import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Display
+import android.view.Gravity
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 class AutoGLMAccessibilityService : AccessibilityService() {
@@ -32,6 +40,7 @@ class AutoGLMAccessibilityService : AccessibilityService() {
 
     private val _latestScreenshot = MutableStateFlow<Bitmap?>(null)
     val latestScreenshot: StateFlow<Bitmap?> = _latestScreenshot.asStateFlow()
+    private var promptView: LinearLayout? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -39,6 +48,7 @@ class AutoGLMAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        removePromptView()
         super.onDestroy()
         instance = null
     }
@@ -145,12 +155,12 @@ class AutoGLMAccessibilityService : AccessibilityService() {
         dispatchGesture(gesture, null, null)
     }
 
-    fun longPress(x: Float, y: Float) {
+    fun longPress(x: Float, y: Float, durationMs: Long = 3000L) {
         val path = Path().apply {
             moveTo(x, y)
         }
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 500))
+            .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
             .build()
 
         dispatchGesture(gesture, null, null)
@@ -202,4 +212,86 @@ class AutoGLMAccessibilityService : AccessibilityService() {
         }
         node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
     }
+
+    /**
+     * 在当前界面上方显示确认或接管条。无障碍浮层不依赖本应用处于前台。
+     */
+    suspend fun awaitDecision(message: String, takeover: Boolean): Boolean {
+        return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
+            fun finish(result: Boolean) {
+                if (!resumed.compareAndSet(false, true)) return
+                mainExecutor.execute { removePromptView() }
+                if (continuation.isActive) continuation.resume(result)
+            }
+            continuation.invokeOnCancellation {
+                mainExecutor.execute { removePromptView() }
+            }
+            mainExecutor.execute {
+                removePromptView()
+                val container = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(20), dp(16), dp(20), dp(16))
+                    setBackgroundColor(Color.WHITE)
+                }
+                container.addView(TextView(this).apply {
+                    text = if (takeover) {
+                        "$message\n\n请在当前页面手动完成后点继续。"
+                    } else {
+                        message
+                    }
+                    setTextColor(Color.parseColor("#212121"))
+                    textSize = 16f
+                })
+                val actions = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.END
+                    setPadding(0, dp(12), 0, 0)
+                }
+                if (takeover) {
+                    actions.addView(promptButton("继续") { finish(true) })
+                } else {
+                    actions.addView(promptButton("取消") { finish(false) })
+                    actions.addView(promptButton("确认") { finish(true) })
+                }
+                container.addView(actions)
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.BOTTOM
+                }
+                overlayWindowManager().addView(container, params)
+                promptView = container
+            }
+        }
+    }
+
+    private fun promptButton(label: String, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun removePromptView() {
+        val view = promptView ?: return
+        promptView = null
+        try {
+            overlayWindowManager().removeView(view)
+        } catch (e: Exception) {
+            Log.w(TAG, "移除提示浮层失败", e)
+        }
+    }
+
+    private fun overlayWindowManager(): WindowManager {
+        return getSystemService(WINDOW_SERVICE) as WindowManager
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }

@@ -38,10 +38,15 @@ import kotlin.to
 
 data class ExecuteResult(
     val success: Boolean,
-    val message: String? = null
+    val message: String? = null,
+    val shouldFinish: Boolean = false
 )
 
-class ActionExecutor(private val service: AutoGLMAccessibilityService) {
+class ActionExecutor(
+    private val service: AutoGLMAccessibilityService,
+    private val onConfirm: suspend (String) -> Boolean = { true },
+    private val onTakeover: suspend (String) -> Unit = {}
+) {
     companion object {
         private const val TAG = "ActionExecutor"
     }
@@ -137,7 +142,7 @@ class ActionExecutor(private val service: AutoGLMAccessibilityService) {
         return when (metadata) {
             "finish" -> {
                 val message = actionObj.get("message")?.asString ?: "任务完成"
-                ExecuteResult(success = true, message = message)
+                ExecuteResult(success = true, shouldFinish = true, message = message)
             }
 
             "do" -> {
@@ -445,13 +450,17 @@ class ActionExecutor(private val service: AutoGLMAccessibilityService) {
         return when (action.lowercase()) {
             "launch" -> launchApp(actionObj)
             "tap" -> tap(actionObj, screenWidth, screenHeight)
-            "type" -> type(actionObj)
+            "type", "type_name" -> type(actionObj)
             "swipe" -> swipe(actionObj, screenWidth, screenHeight)
             "back" -> back()
             "home" -> home()
             "longpress", "long press" -> longPress(actionObj, screenWidth, screenHeight)
             "doubletap", "double tap" -> doubleTap(actionObj, screenWidth, screenHeight)
             "wait" -> wait(actionObj)
+            "take_over", "takeover" -> takeOver(actionObj)
+            "note" -> ExecuteResult(success = true, message = "已记录当前页面")
+            "call_api" -> ExecuteResult(success = true, message = "已记录，继续执行")
+            "interact" -> ExecuteResult(success = true, message = "存在多个选项，按当前屏幕继续")
             else -> ExecuteResult(success = false, message = "不支持的操作: $action")
         }
     }
@@ -501,6 +510,14 @@ class ActionExecutor(private val service: AutoGLMAccessibilityService) {
                     TAG,
                     "Tap: 相对坐标 ($relativeX, $relativeY) -> 绝对坐标 ($absoluteX, $absoluteY)"
                 )
+                val sensitiveMessage = actionObj.get("message")?.asString
+                if (!sensitiveMessage.isNullOrBlank() && !onConfirm(sensitiveMessage)) {
+                    return ExecuteResult(
+                        success = false,
+                        shouldFinish = true,
+                        message = "用户取消了敏感操作"
+                    )
+                }
                 service.tap(absoluteX, absoluteY)
                 delay(500)
                 ExecuteResult(success = true, message = "已点击坐标: ($absoluteX, $absoluteY)")
@@ -577,8 +594,10 @@ class ActionExecutor(private val service: AutoGLMAccessibilityService) {
             screenHeight
         )
 
-        Log.d(TAG, "Swipe: 从 ($startX, $startY) 到 ($endX, $endY)")
-        service.swipe(startX, startY, endX, endY)
+        val distanceSquared = (endX - startX) * (endX - startX) + (endY - startY) * (endY - startY)
+        val duration = (distanceSquared / 1000.0).toLong().coerceIn(1000L, 2000L)
+        Log.d(TAG, "Swipe: 从 ($startX, $startY) 到 ($endX, $endY)，时长 ${duration}ms")
+        service.swipe(startX, startY, endX, endY, duration)
         delay(500)
         return ExecuteResult(
             success = true,
@@ -617,7 +636,7 @@ class ActionExecutor(private val service: AutoGLMAccessibilityService) {
         )
 
         Log.d(TAG, "LongPress: 坐标 ($x, $y)")
-        service.longPress(x, y)
+        service.longPress(x, y, 3000L)
         delay(800)
         return ExecuteResult(success = true, message = "已长按坐标: ($x, $y)")
     }
@@ -695,189 +714,13 @@ class ActionExecutor(private val service: AutoGLMAccessibilityService) {
         return 1000L
     }
 
-    private fun getPackageName(appName: String): String {
-        // 应用名到包名映射
-        val appPackageMap = mapOf(
-            // Social & Messaging
-            "微信" to "com.tencent.mm",
-            "WeChat" to "com.tencent.mm",
-            "wechat" to "com.tencent.mm",
-            "QQ" to "com.tencent.mobileqq",
-            "qq" to "com.tencent.mobileqq",
-            "QQ音乐" to "com.tencent.qqmusic",
-            "微博" to "com.sina.weibo",
-            // E-commerce
-            "淘宝" to "com.taobao.taobao",
-            "淘宝闪购" to "com.taobao.taobao",
-            "京东" to "com.jingdong.app.mall",
-            "京东秒送" to "com.jingdong.app.mall",
-            "拼多多" to "com.xunmeng.pinduoduo",
-            "Temu" to "com.einnovation.temu",
-            "temu" to "com.einnovation.temu",
-            // Lifestyle & Social
-            "小红书" to "com.xingin.xhs",
-            "豆瓣" to "com.douban.frodo",
-            "知乎" to "com.zhihu.android",
-            // Maps & Navigation
-            "高德地图" to "com.autonavi.minimap",
-            "百度地图" to "com.baidu.BaiduMap",
-            // Food & Services
-            "美团" to "com.sankuai.meituan",
-            "大众点评" to "com.dianping.v1",
-            "饿了么" to "me.ele",
-            "肯德基" to "com.yek.android.kfc.activitys",
-            // Travel
-            "携程" to "ctrip.android.view",
-            "铁路12306" to "com.MobileTicket",
-            "12306" to "com.MobileTicket",
-            "去哪儿" to "com.Qunar",
-            "去哪儿旅行" to "com.Qunar",
-            "滴滴出行" to "com.sdu.did.psnger",
-            // Video & Entertainment
-            "bilibili" to "tv.danmaku.bili",
-            "抖音" to "com.ss.android.ugc.aweme",
-            "快手" to "com.smile.gifmaker",
-            "腾讯视频" to "com.tencent.qqlive",
-            "爱奇艺" to "com.qiyi.video",
-            "优酷视频" to "com.youku.phone",
-            "芒果TV" to "com.hunantv.imgo.activity",
-            "红果短剧" to "com.phoenix.read",
-            "VLC" to "org.videolan.vlc",
-            // Music & Audio
-            "网易云音乐" to "com.netease.cloudmusic",
-            "QQ音乐" to "com.tencent.qqmusic",
-            "汽水音乐" to "com.luna.music",
-            "喜马拉雅" to "com.ximalaya.ting.android",
-            "PiMusicPlayer" to "com.Project100Pi.themusicplayer",
-            "pimusicplayer" to "com.Project100Pi.themusicplayer",
-            "RetroMusic" to "code.name.monkey.retromusic",
-            "retromusic" to "code.name.monkey.retromusic",
-            // Reading
-            "番茄小说" to "com.dragon.read",
-            "番茄免费小说" to "com.dragon.read",
-            "七猫免费小说" to "com.kmxs.reader",
-            // Productivity
-            "飞书" to "com.ss.android.lark",
-            "QQ邮箱" to "com.tencent.androidqqmail",
-            "GoogleDocs" to "com.google.android.apps.docs.editors.docs",
-            "Google Docs" to "com.google.android.apps.docs.editors.docs",
-            "GoogleSlides" to "com.google.android.apps.docs.editors.slides",
-            "Google Slides" to "com.google.android.apps.docs.editors.slides",
-            "GoogleTasks" to "com.google.android.apps.tasks",
-            "Google Tasks" to "com.google.android.apps.tasks",
-            "Joplin" to "net.cozic.joplin",
-            "joplin" to "net.cozic.joplin",
-            // AI & Tools
-            "豆包" to "com.larus.nova",
-            // Health & Fitness
-            "keep" to "com.gotokeep.keep",
-            "美柚" to "com.lingan.seeyou",
-            // News & Information
-            "腾讯新闻" to "com.tencent.news",
-            "今日头条" to "com.ss.android.article.news",
-            // Real Estate
-            "贝壳找房" to "com.lianjia.beike",
-            "安居客" to "com.anjuke.android.app",
-            // Finance
-            "同花顺" to "com.hexin.plat.android",
-            "Bluecoins" to "com.rammigsoftware.bluecoins",
-            "bluecoins" to "com.rammigsoftware.bluecoins",
-            // Games
-            "星穹铁道" to "com.miHoYo.hkrpg",
-            "崩坏：星穹铁道" to "com.miHoYo.hkrpg",
-            "恋与深空" to "com.papegames.lysk.cn",
-            // System & Common apps (多写几种变体便于匹配)
-            "AndroidSystemSettings" to "com.android.settings",
-            "Android System Settings" to "com.android.settings",
-            "Android  System Settings" to "com.android.settings",
-            "Android-System-Settings" to "com.android.settings",
-            "Settings" to "com.android.settings",
-            "AudioRecorder" to "com.android.soundrecorder",
-            "audiorecorder" to "com.android.soundrecorder",
-            "Chrome" to "com.android.chrome",
-            "chrome" to "com.android.chrome",
-            "Google Chrome" to "com.android.chrome",
-            "Clock" to "com.android.deskclock",
-            "clock" to "com.android.deskclock",
-            "Contacts" to "com.android.contacts",
-            "contacts" to "com.android.contacts",
-            "Duolingo" to "com.duolingo",
-            "duolingo" to "com.duolingo",
-            "Expedia" to "com.expedia.bookings",
-            "expedia" to "com.expedia.bookings",
-            "Files" to "com.android.fileexplorer",
-            "files" to "com.android.fileexplorer",
-            "File Manager" to "com.android.fileexplorer",
-            "file manager" to "com.android.fileexplorer",
-            "Gmail" to "com.google.android.gm",
-            "gmail" to "com.google.android.gm",
-            "GoogleMail" to "com.google.android.gm",
-            "Google Mail" to "com.google.android.gm",
-            "GoogleFiles" to "com.google.android.apps.nbu.files",
-            "googlefiles" to "com.google.android.apps.nbu.files",
-            "FilesbyGoogle" to "com.google.android.apps.nbu.files",
-            "GoogleCalendar" to "com.google.android.calendar",
-            "Google-Calendar" to "com.google.android.calendar",
-            "Google Calendar" to "com.google.android.calendar",
-            "google calendar" to "com.google.android.calendar",
-            "GoogleChat" to "com.google.android.apps.dynamite",
-            "Google Chat" to "com.google.android.apps.dynamite",
-            "Google-Chat" to "com.google.android.apps.dynamite",
-            "GoogleClock" to "com.google.android.deskclock",
-            "Google Clock" to "com.google.android.deskclock",
-            "Google-Clock" to "com.google.android.deskclock",
-            "GoogleContacts" to "com.google.android.contacts",
-            "Google Contacts" to "com.google.android.contacts",
-            "google contacts" to "com.google.android.contacts",
-            "Google Drive" to "com.google.android.apps.docs",
-            "Google-Drive" to "com.google.android.apps.docs",
-            "google drive" to "com.google.android.apps.docs",
-            "GoogleDrive" to "com.google.android.apps.docs",
-            "Googledrive" to "com.google.android.apps.docs",
-            "googledrive" to "com.google.android.apps.docs",
-            "GoogleFit" to "com.google.android.apps.fitness",
-            "googlefit" to "com.google.android.apps.fitness",
-            "GoogleKeep" to "com.google.android.keep",
-            "googlekeep" to "com.google.android.keep",
-            "GoogleMaps" to "com.google.android.apps.maps",
-            "Google Maps" to "com.google.android.apps.maps",
-            "googlemaps" to "com.google.android.apps.maps",
-            "google maps" to "com.google.android.apps.maps",
-            "Google Play Books" to "com.google.android.apps.books",
-            "Google-Play-Books" to "com.google.android.apps.books",
-            "google play books" to "com.google.android.apps.books",
-            "google-play-books" to "com.google.android.apps.books",
-            "GooglePlayBooks" to "com.google.android.apps.books",
-            "googleplaybooks" to "com.google.android.apps.books",
-            "GooglePlayStore" to "com.android.vending",
-            "Google Play Store" to "com.android.vending",
-            "Google-Play-Store" to "com.android.vending",
-            "GoogleSlides" to "com.google.android.apps.docs.editors.slides",
-            "Google Slides" to "com.google.android.apps.docs.editors.slides",
-            "Google-Slides" to "com.google.android.apps.docs.editors.slides",
-            "GoogleTasks" to "com.google.android.apps.tasks",
-            "Google Tasks" to "com.google.android.apps.tasks",
-            "McDonald" to "com.mcdonalds.app",
-            "mcdonald" to "com.mcdonalds.app",
-            "Osmand" to "net.osmand",
-            "osmand" to "net.osmand",
-            "Quora" to "com.quora.android",
-            "quora" to "com.quora.android",
-            "Reddit" to "com.reddit.frontpage",
-            "reddit" to "com.reddit.frontpage",
-            "SimpleCalendarPro" to "com.scientificcalculatorplus.simplecalculator.basiccalculator.mathcalc",
-            "SimpleSMSMessenger" to "com.simplemobiletools.smsmessenger",
-            "Telegram" to "org.telegram.messenger",
-            "Tiktok" to "com.zhiliaoapp.musically",
-            "tiktok" to "com.zhiliaoapp.musically",
-            "Twitter" to "com.twitter.android",
-            "twitter" to "com.twitter.android",
-            "X" to "com.twitter.android",
-            "Whatsapp" to "com.whatsapp",
-            "WhatsApp" to "com.whatsapp"
-        )
-        return appPackageMap[appName] ?: appName
+    private suspend fun takeOver(actionObj: JsonObject): ExecuteResult {
+        val message = actionObj.get("message")?.asString ?: "请手动完成登录或验证后继续"
+        onTakeover(message)
+        return ExecuteResult(success = true, message = "用户已接管并继续")
     }
+
+    private fun getPackageName(appName: String): String = AppPackages.packageName(appName)
 
     private fun findEditableNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (root.isEditable) {

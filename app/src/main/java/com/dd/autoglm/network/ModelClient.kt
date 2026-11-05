@@ -14,6 +14,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 data class ModelResponse(
@@ -191,9 +192,13 @@ class ModelClient(
     }
 
     private fun buildSystemPrompt(): String {
-        // 对齐 Python 原项目的中文提示词，保持操作定义和规则一致
+        val today = LocalDate.now()
+        val weekdays = arrayOf("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+        val formattedDate = today.format(DateTimeFormatter.ofPattern("yyyy年MM月dd日")) +
+            " " + weekdays[today.dayOfWeek.value - 1]
+        // 对齐官方中文提示词。本地额外保留非法格式禁令和「先 Launch」约束。
         return """
-今天的日期是: ${LocalDate.now()}
+今天的日期是: $formattedDate
 你是一个智能体分析专家，可以根据操作历史和当前状态图执行一系列操作来完成任务。
 你必须严格按照要求输出以下格式：
 <think>{think}</think>

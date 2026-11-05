@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd.autoglm.data.PreferencesRepository
 import com.dd.autoglm.domain.ActionExecutor
+import com.dd.autoglm.domain.AppPackages
 import com.dd.autoglm.network.ModelClient
 import com.dd.autoglm.network.bean.ContentItem
 import com.dd.autoglm.network.bean.ChatMessage as NetworkChatMessage
@@ -62,7 +63,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             
             // 初始化 ActionExecutor
             AutoGLMAccessibilityService.getInstance()?.let { service ->
-                actionExecutor = ActionExecutor(service)
+                actionExecutor = createActionExecutor(service)
             }
             
             // 监听当前应用变化
@@ -120,7 +121,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 modelClient = ModelClient(baseUrl, apiKey)
-                actionExecutor = ActionExecutor(accessibilityService)
+                actionExecutor = createActionExecutor(accessibilityService)
                 
                 // 清空消息上下文，开始新的任务
                 messageContext.clear()
@@ -143,7 +144,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val executor = actionExecutor ?: return
         
         var stepCount = 0
-        val maxSteps = 50
+        val maxSteps = 100
         
         var retryCount = 0
         
@@ -185,7 +186,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             
             // 获取当前应用
-            val currentApp = accessibilityService.currentApp.value
+            val currentApp = AppPackages.displayName(accessibilityService.currentApp.value)
             Log.d("ChatViewModel", "当前应用: $currentApp")
             
             // 构建消息上下文
@@ -258,7 +259,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 screenshot.width,
                 screenshot.height
             )
-            Log.d("ChatViewModel", "动作执行结果: success=${result.success}, message=${result.message}")
+            Log.d("ChatViewModel", "动作执行结果: success=${result.success}, shouldFinish=${result.shouldFinish}, message=${result.message}")
+
+            if (result.shouldFinish) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    taskCompletedMessage = result.message ?: "任务已结束"
+                )
+                return
+            }
             
             val isFinished = result.message != null && (result.message!!.contains("完成") || 
                 result.message!!.contains("finish")) || 
@@ -360,6 +369,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    private fun createActionExecutor(service: AutoGLMAccessibilityService): ActionExecutor {
+        return ActionExecutor(
+            service,
+            onConfirm = { message -> service.awaitDecision(message, takeover = false) },
+            onTakeover = { message ->
+                service.awaitDecision(message, takeover = true)
+                Unit
+            }
+        )
     }
     
     fun clearTaskCompletedMessage() {
